@@ -1,44 +1,92 @@
 #-*- coding:utf-8 -*-
 import cv2
+import picamera
+import serial
 import numpy as np
 from operator import itemgetter
+import RPi.GPIO as GPIO
+import time
 
 #変数
 
 #調整必須
+countsphoto=1#サンプル数(1以上)
+awbx="incandescent"#撮影パラメータ
+meterx="matrix"#撮影パラメータ
+exposurex="verylong"#撮影パラメータ
+servoint=3/10000#サーボの変化量(0~5/10000(首振り９０度)まで)
+
+#調整しなくても割といける
 high_low_color=[10,115,105]#色を抽出する際の[色相の誤差範囲,彩度の最低値,明度の最低値]を設定
 min_img_area = 1000#対象物の領域の最小サイズ
-#調整しなくても割といける
+max_img_area = 782500#対象物の領域の最大サイズ
 nomal_color= np.uint8([[[0,255,255]]])#選択する色指定
 bsize=13#閾値を決める際の領域設定(線の太さみたいな)(奇数)
 c=1 #2値化の際のノイズを消す
 sigmaxy=100000#バイラテラルフィルタ用のぼかし加減
+jpegfile_start="/home/pi/Desktop/robocon/camerasample/re"
+jpegfile_end="second.jpg"
+#ser=serial.Serial('/dev/ttyUSB0',9600)
+anses=[]
+bigsquares=[]
 #tips
 #色部分が分離する場合:明彩度の最低値の変更
 #そもそも面積が出力されない場合:対象物の領域の最小サイズの変更
 #近い色で反応する場合:色相の誤差範囲の変更
 
 
-def main():
-    for i in range(1500, 4600,100):
-        jpegfile=file_settings(i)
-        h_error_lower,h_error_upper=mask_settings()
-        img,img2,img_hsv=clor_to_hsv(jpegfile)
-        bilateral_img,img_mask=usemask(img_hsv,h_error_lower, h_error_upper)
-        img_simple_outline,img_simple_contour=decision_mask(img_mask)
-        square,img3=list_area(bilateral_img,img_mask,img_simple_contour,img2)
-        #debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3)
-        math_long(square[0])#出力される面積
 
+def Image_processing():
+    for i in range(1):
+        #gpiocon(servoint,i)
+        #campic()
+        for ese in range(1750,4000,250):
+            jpegfile=file_settings(ese)
+            #jpegfile="/home/pi/Desktop/python3/lists/1.jpg"
+            h_error_lower,h_error_upper=mask_settings()
+            img,img2,img_hsv=clor_to_hsv(jpegfile)
+            bilateral_img,img_mask=usemask(img_hsv,h_error_lower, h_error_upper)
+            img_simple_outline,img_simple_contour=decision_mask(img_mask)
+            bigsquares,img3=list_area(bilateral_img,img_mask,img_simple_contour,img2)
+            debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3)
+            math_long(bigsquares[0],i)
+            bigsquares.clear()
+        
+def campic():#カメラで撮影
+    with picamera.PiCamera() as picameras:
+        picameras.awb_mode=awbx
+        picameras.meter_mode=meterx
+        picameras.exposure_mode=exposurex
+        for nums in range(countsphoto):
+            jpegfile_num=nums
+            jpegfile_name=jpegfile_start+str(jpegfile_num)+jpegfile_end
+            picameras.capture(jpegfile_name)
+            
+def gpiocon(servoint,i):
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(14, GPIO.OUT)
+    servoi=0
+    if i==0:
+        GPIO.output(14, False)
+        GPIO.output(14, False)
+    elif i==1:
+        GPIO.output(14, True)
+        GPIO.output(14, False)
+    elif i==2:
+        GPIO.output(14, False)
+        GPIO.output(14, True)
+    
+        
 
-def math_long(square):
-    square=5.986*(10**-12)*(square**3)-1.484*(10**-6)*(square**2)+0.13*square+324.471
-    print square
+def math_long(square,i):
+    #直線上の場合
+    square=(-(9.958*(10**(-12))*(square**3))+1.956*(10**(-6))*(square**2)-0.135*square+5250.4548)
+    #斜めの場合
+    #square=(-1.209*(10**(-12))*(square**3))+2.214*(10**(-6))*(square**2)-(0.148*square)+5354.5106
+    anses.append(square)
 
 
 def file_settings(num):#ファイル名設定
-    jpegfile_start="E:\program\cont\python2\c"
-    jpegfile_end=".jpg"
     jpegfile_num=num
     jpegfile=jpegfile_start+str(jpegfile_num)+jpegfile_end
     return jpegfile
@@ -73,26 +121,26 @@ def decision_mask(img_mask):#マスク画像から判別する場合
     return img_simple_outline,img_simple_contour
 
 
-def decision_img(bilateral_img,img_mask):#画像から判別する場合
-    img_color = cv2.bitwise_and(bilateral_img, bilateral_img, mask=img_mask)#マスク画像を適用
-    gray_img = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)#グレースケール化
-    img_bw=cv2.adaptiveThreshold(gray_img,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,bsize,c)#二値化
-    img_simple_outline,img_simple_contour, _ = cv2.findContours(img_bw, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)#輪郭の頂点を取得
-    return img_color,gray_img,img_bw,img_simple_outline,img_simple_contour
-
-
 def list_area(bilateral_img,img_mask,img_simple_contour,img2):#面積のリスト化
-    large_simple_contour = [i for i in img_simple_contour if (cv2.contourArea(i) > min_img_area)and(cv2.contourArea(i)<782500)]#対象物かノイズかの判断
+    large_simple_contour = [i for i in img_simple_contour if (cv2.contourArea(i) > min_img_area)and(cv2.contourArea(i)<max_img_area)]#対象物かノイズかの判断
     square=[cv2.contourArea(i) for i in large_simple_contour]
     for i in large_simple_contour:
         img3 = cv2.drawContours(img2, i,-1, (255,0,0), 3)
-    return square,img3
+    square.sort(reverse=True)
+    print(square)
+    bigsquares.append(square[0])
+    return bigsquares,img3
     #list内包型
     #large_simple_contour = []
     #for i in img_simple_contour:
     #   if cv2.contourArea(i) > min_img_area
     #   large_simple_contour.append(i)
 
+def avepix(bigsquares):#ピクセルの平均を得る
+    print (bigsquares)
+    fixpix=sum(bigsquares)/len(bigsquares)
+    print (fixpix)
+    return fixpix
 
 def debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3):# マスクから判別する場合のデバッグ
     cv2.imshow("debug",img)#入力画像
@@ -106,23 +154,7 @@ def debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3):# マスクから
     cv2.imshow("debug",img3)#頂点の画像
     cv2.waitKey(0)
 
-
-def debug_img_images(img,img_hsv,bilateral_img,img_mask,img3,img_color,gray_img,img_bw):# 画像から判別する場合のデバッグ
-    cv2.imshow("debug",img)#入力画像
-    cv2.waitKey(0)
-    cv2.imshow("debug",img_hsv)#入力画像のhsv画像
-    cv2.waitKey(0)
-    cv2.imshow("debug",bilateral_img)#バイラテラルフィルタ処理後
-    cv2.waitKey(0)
-    cv2.imshow("debug",img_mask)#マスクの画像
-    cv2.waitKey(0)
-    cv2.imshow("debug",img_color)#マスクの画像を適用した画像
-    cv2.waitKey(0)
-    cv2.imshow("debug",gray_img)#グレースケール化した画像
-    cv2.waitKey(0)
-    cv2.imshow("debug",img_bw)#二値化した画像を表示
-    cv2.waitKey(0)
-    cv2.imshow("debug",img3)#マスクの画像
-    cv2.waitKey(0)
-
-main()
+Image_processing()
+print(anses)
+anses.clear()
+        
