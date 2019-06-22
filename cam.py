@@ -1,18 +1,25 @@
-
 #-*- coding:utf-8 -*-
 import cv2
 import numpy as np
+from operator import itemgetter
 square=[]
+cog={}
 
 #変数
 nomal_color= np.uint8([[[0,255,255]]])#選択する色指定
-high_low_color=[10,150,255]#色を抽出する際の[色相の誤差範囲,明彩度の最低値,明彩度の最高値]を設定
-th_num=100#二値化する際の閾値
-kernel=5#ガウシアンフィルタ用のカーネルを指定
-min_img_area = 300#対象物の領域の最小サイズ
+high_low_color=[3,110,255]#色を抽出する際の[色相の誤差範囲,明彩度の最低値,明彩度の最高値]を設定
+th_num=5#二値化する際の閾値
+kernel=11#ガウシアンフィルタ用のカーネルを指定
+min_img_area = 1000#対象物の領域の最小サイズ
+
+
+#色部分が分離する場合:ガウシアンフィルタ用のカーネル、明彩度の最低値の変更
+#そもそも面積が出力されない場合:対象物の領域の最小サイズの変更
+#近い色で反応する場合:色相の誤差範囲の変更
+
 
 #画像形式の変換
-img = cv2.imread("E:\program\cont\sumple\locc.jpg")#画像読み込み
+img = cv2.imread("E:\program\cont\python2\c4500.jpg")#画像読み込み
 img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)#元画像をHSVに変換
 
 # 抽出する色の前処理
@@ -37,22 +44,30 @@ img_simple_outline,img_simple_contour, _ = cv2.findContours(img_bw, cv2.RETR_EXT
 large_simple_contour = [i for i in img_simple_contour if cv2.contourArea(i) > min_img_area]#対象物かノイズかの判断
 for i in large_simple_contour:#面積のリスト化
     square.append(cv2.contourArea(i))
+#list内包型
+#large_simple_contour = []
+#for i in img_simple_contour:
+#   if cv2.contourArea(i) > min_img_area
+#   large_simple_contour.append(i)
+
 
 
 #debug
 img2 = img.copy()
 print large_simple_contour
+print u"\n\n面積\n\n"
 print square#出力される面積
-cv2.imshow("debug",img)#入力画像を表示
-cv2.waitKey(0)
-cv2.imshow("debug",img_hsv)#入力画像のHSV画像を表示
-cv2.waitKey(0)
-cv2.imshow("debug",gaussian_img)#平滑化後の画像を表示
-cv2.waitKey(0)
-cv2.imshow("debug",gray_img)#グレースケール化した画像を表示
-cv2.waitKey(0)
-cv2.imshow("debug",img_bw)#二値化した画像を表示
-cv2.waitKey(0)
+print u"\n"
+# cv2.imshow("debug",img)#入力画像を表示
+# cv2.waitKey(0)
+# cv2.imshow("debug",img_hsv)#入力画像のHSV画像を表示
+# cv2.waitKey(0)
+# cv2.imshow("debug",gaussian_img)#平滑化後の画像を表示
+# cv2.waitKey(0)
+# cv2.imshow("debug",gray_img)#グレースケール化した画像を表示
+# cv2.waitKey(0)
+# cv2.imshow("debug",img_bw)#二値化した画像を表示
+# cv2.waitKey(0)
 
 img_outline,img_contour, _ = cv2.findContours(img_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)#輪郭全域を取得
 large_contour = [i for i in img_contour if cv2.contourArea(i) > min_img_area]#対象物かノイズかの判断
@@ -60,8 +75,24 @@ for i in large_contour:#画像の輪郭全域を抽出
     img_large_contour = cv2.drawContours(img, i, -1, (0,255,0), 3)
 cv2.imshow("debug",img_large_contour)#輪郭全域を表示
 cv2.waitKey(0)
-
-for i in large_simple_contour:#画像の輪郭の全頂点を抽出
-    img_large_simple_contour = cv2.drawContours(img2, i, -1, (0,255,0), 3)
-cv2.imshow("debug",img_large_simple_contour)#画像の輪郭の全頂点を表示
-cv2.waitKey(0)
+#
+# for i in large_simple_contour:#画像の輪郭の全頂点を抽出
+#     img_large_simple_contour = cv2.drawContours(img2, i, -1, (0,255,0), 3)
+# cv2.imshow("debug",img_large_simple_contour)#画像の輪郭の全頂点を表示
+# cv2.waitKey(0)
+#
+# for i in img_contour:
+#     M = cv2.moments(i)
+#     cxi = int(M['m10']/M['m00'])
+#     cyi = int(M['m01']/M['m00'])
+#     cxs = str(M['m10']/M['m00'])
+#     cys = str(M['m01']/M['m00'])
+#     cxys="x="+cxs+"\t"+"\t"+"y="+cys
+#     print cxys
+#     cog[cxi]=cyi
+# cog=sorted(cog.items())
+# print cog
+# print u"\n\n重心\n\n"
+# print cog[0][1]
+# #print cog[1][1]
+# #print cog[2][1]
