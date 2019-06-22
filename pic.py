@@ -24,9 +24,9 @@ nomal_color= np.uint8([[[0,255,255]]])#選択する色指定
 bsize=13#閾値を決める際の領域設定(線の太さみたいな)(奇数)
 c=1 #2値化の際のノイズを消す
 sigmaxy=100000#バイラテラルフィルタ用のぼかし加減
-jpegfile_start="/home/pi/Desktop/robocon/camerasample/re"
-jpegfile_end="second.jpg"
-#ser=serial.Serial('/dev/ttyUSB0',9600)
+jpegfile_start="/home/pi/Desktop/python3/listss/"
+jpegfile_end=".jpg"
+ser=serial.Serial('/dev/ttyUSB0',9600)
 anses=[]
 bigsquares=[]
 #tips
@@ -37,10 +37,10 @@ bigsquares=[]
 
 
 def Image_processing():
-    for i in range(1):
-        #gpiocon(servoint,i)
-        #campic()
-        for ese in range(1750,4000,250):
+    for i in range(3):
+        gpiocon(servoint,i)
+        campic()
+        for ese in range(countsphoto):
             jpegfile=file_settings(ese)
             #jpegfile="/home/pi/Desktop/python3/lists/1.jpg"
             h_error_lower,h_error_upper=mask_settings()
@@ -48,9 +48,10 @@ def Image_processing():
             bilateral_img,img_mask=usemask(img_hsv,h_error_lower, h_error_upper)
             img_simple_outline,img_simple_contour=decision_mask(img_mask)
             bigsquares,img3=list_area(bilateral_img,img_mask,img_simple_contour,img2)
-            debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3)
-            math_long(bigsquares[0],i)
-            bigsquares.clear()
+            #debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3)
+        fixpix=avepix(bigsquares)
+        math_long(fixpix,i)
+        bigsquares.clear()
         
 def campic():#カメラで撮影
     with picamera.PiCamera() as picameras:
@@ -80,9 +81,10 @@ def gpiocon(servoint,i):
 
 def math_long(square,i):
     #直線上の場合
-    square=(-(9.958*(10**(-12))*(square**3))+1.956*(10**(-6))*(square**2)-0.135*square+5250.4548)
-    #斜めの場合
-    #square=(-1.209*(10**(-12))*(square**3))+2.214*(10**(-6))*(square**2)-(0.148*square)+5354.5106
+    if i==0:
+        square=(2.918*(10**(-16))*(square**4))-(6.947*(10**(-11))*(square**3))+6.135*(10**(-6))*(square**2)-0.247*square+6258.9623
+    else:
+        square=(2.918*(10**(-16))*(square**4))-(6.947*(10**(-11))*(square**3))+6.135*(10**(-6))*(square**2)-0.247*square+6158.9623   
     anses.append(square)
 
 
@@ -153,8 +155,21 @@ def debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3):# マスクから
     cv2.waitKey(0)
     cv2.imshow("debug",img3)#頂点の画像
     cv2.waitKey(0)
-
-Image_processing()
-print(anses)
-anses.clear()
+    
+while True:
+    GPIO.cleanup()
+    sendcodeb="B"
+    sendcodec="C"
+    sendcodee="E"
+    readxbyte=ser.readline()
+    readx=readxbyte.strip().decode('utf-8')
+    if readx=="A":
+        ser.write(sendcodeb.encode())
+        Image_processing()
+        ser.write(sendcodec.encode())
+    elif readx=="D":
+        sendcodeans="E""\n\r"+str(anses[0])+"\n\r"+str(anses[1])+"\n\r"+str(anses[2])
+        ser.write(sendcodeans.encode())
+        print(sendcodeans)
+        anses.clear()
         
