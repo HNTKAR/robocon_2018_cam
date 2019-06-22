@@ -1,44 +1,49 @@
 #-*- coding:utf-8 -*-
-import cv2
+import cv2, matplotlib
 import numpy as np
-# thresh=250#閾値
-# maxpix=255#全て白にする
-imgs = cv2.imread("E:\program\cont\loccc.jpg")
-imgss = cv2.cvtColor(imgs, cv2.COLOR_BGR2HSV)#元画像をHSVに変換
-#imgs = cv2.adaptiveThreshold(imgs,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,11,3)
-# imgs = cv2.Canny(imgs, 10, 100)
-kernel = np.ones((3,3),np.uint8)#輪郭をぼかす
-imgs = cv2.morphologyEx(imgs, cv2.MORPH_OPEN, kernel)
-nomal_color= np.uint8([[[0,255,255]]])#色指定
-high_low_color=[10,150,255]#[Hの+-,SV値の濃,SV値の薄]
-color_hsv = cv2.cvtColor(nomal_color,cv2.COLOR_BGR2HSV)
-hsv_h = color_hsv[0][0][0]
-hsv_h=int(hsv_h)
-hsv_hp=hsv_h+high_low_color[0]
-hsv_hm=hsv_h-high_low_color[0]
+import matplotlib.pyplot as plt
 
-# 取得する色の範囲を指定する
-lower_yellow = np.array([hsv_hm, high_low_color[1], high_low_color[1]])
-upper_yellow = np.array([hsv_hp, high_low_color[2], high_low_color[2]])
+chips = cv2.imread('E:\program\cont\sumple\chip.png')#画像読み込み
+chips_gray = cv2.cvtColor(chips, cv2.COLOR_BGR2GRAY)#グレースケール化
+chips_preprocessed = cv2.GaussianBlur(chips_gray, (5, 5), 0)#平滑化
+_, chips_binarya = cv2.threshold(chips_preprocessed, 230, 255, cv2.THRESH_BINARY)#2値化
+chips_binary = cv2.bitwise_not(chips_binarya)
 
-# 指定した色に基づいたマスク画像の生成
-img_mask = cv2.inRange(imgss, lower_yellow, upper_yellow)
-img_color = cv2.bitwise_and(imgs, imgs, mask=img_mask)
+_, chips_contours, _ = cv2.findContours(chips_binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)#輪郭
+chips_and_contours = np.copy(chips)
+min_chip_area = 60
+large_contours = [cnt for cnt in chips_contours if cv2.contourArea(cnt) > min_chip_area]
+#cv2.contourArea(cnt)でx個目の輪郭の面積を判断
 
-img_color = cv2.Canny(img_color, 50, 200)
-a,img_color =cv2.threshold(img_color, 127, 255,cv2.THRESH_BINARY_INV)
-cv2.imshow("Show BINARIZATION Image",img_color)
+bounding_img = np.copy(chips)
+for contour in large_contours:
+	rect = cv2.minAreaRect(contour)
+	box = cv2.boxPoints(rect)
+	box = np.int0(box)
+	cgx = int(rect[0][0])
+	cgy = int(rect[0][1])
+	leftx = int(cgx - (rect[1][0]/2.0))
+	lefty = int(cgy - (rect[1][1]/2.0))
+	angle = round(rect[2],1)
+	cv2.drawContours(bounding_img,[box],0,(0,0,255),2)
+	cv2.circle(bounding_img,(cgx,cgy), 10, (255,0,0), -1)
+	font = cv2.FONT_HERSHEY_SIMPLEX
+	cv2.putText(bounding_img,'Rot: '+str(angle)+'[deg]',(leftx,lefty), font, 0.7, (0,0,0),2,cv2.LINE_AA)
+# plt.imshow(chips_preprocessed)
+# plt.imshow(bounding_img)
 
-#輪郭検知
-image, contours, hierarchy = cv2.findContours(img_color,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-imax=len(contours)
-
-cnt = contours[x]
-
-area = cv2.contourArea(cnt)
-
-
-img_colo = cv2.drawContours(imgs, contours, -1, (0,255,0), 1)
-cv2.imshow("Show BINARIZATION Image",img_colo)
-
+print len(chips_contours)
+cv2.imshow("Show BINARIZATION Image",chips_binarya)
+plt.axis("off")
 cv2.waitKey(0)
+cv2.imshow("Show BINARIZATION Image",chips_binary)
+cv2.waitKey(0)
+plt.imshow(bounding_img)
+plt.axis("off")
+plt.show()
+
+#
+# large_contours = []
+# for cnt in chips_contours
+# 	if cv2.contourArea(cnt) > min_chip_area
+# 		extension_2.append(cnt)
