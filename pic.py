@@ -10,11 +10,12 @@ import time
 #変数
 
 #調整必須
-countsphoto=1#サンプル数(1以上)
-awbx="incandescent"#撮影パラメータ
+countsphoto=2#サンプル数(1以上)
+awbx="fluorescent"#撮影パラメータ
 meterx="matrix"#撮影パラメータ
 exposurex="verylong"#撮影パラメータ
 servoint=3/10000#サーボの変化量(0~5/10000(首振り９０度)まで)
+cutset=[0,250,1000,400]#切り取りの[左上の位置y,左上の位置x,x座標長さ,y座標長さ]
 
 #調整しなくても割といける
 high_low_color=[10,115,105]#色を抽出する際の[色相の誤差範囲,彩度の最低値,明度の最低値]を設定
@@ -24,7 +25,7 @@ nomal_color= np.uint8([[[0,255,255]]])#選択する色指定
 bsize=13#閾値を決める際の領域設定(線の太さみたいな)(奇数)
 c=1 #2値化の際のノイズを消す
 sigmaxy=100000#バイラテラルフィルタ用のぼかし加減
-jpegfile_start="/home/pi/Desktop/python3/listss/"
+jpegfile_start="/home/pi/Desktop/robocon/debug/"
 jpegfile_end=".jpg"
 ser=serial.Serial('/dev/ttyUSB0',9600)
 anses=[]
@@ -34,58 +35,69 @@ bigsquares=[]
 #そもそも面積が出力されない場合:対象物の領域の最小サイズの変更
 #近い色で反応する場合:色相の誤差範囲の変更
 
-
+def math_long(square,i):
+    #直線上の場合
+    if i==0:
+        #####この下の行を変える#####
+        square=(-9.958*(10**(-12))*(square**3))+1.956*(10**(-6))*(square**2)-0.135*square+5250.4548
+    #斜めの場合
+    else:
+        #####この下の行を変える#####
+        square=(-9.958*(10**(-12))*(square**3))+1.956*(10**(-6))*(square**2)-0.135*square+6250.4548
+        
+    anses.append(square)
 
 def Image_processing():
     for i in range(3):
         gpiocon(servoint,i)
-        campic()
+        campic(i)
         for ese in range(countsphoto):
+            #print("count="+str(ese))
             jpegfile=file_settings(ese)
-            #jpegfile="/home/pi/Desktop/python3/lists/1.jpg"
             h_error_lower,h_error_upper=mask_settings()
             img,img2,img_hsv=clor_to_hsv(jpegfile)
             bilateral_img,img_mask=usemask(img_hsv,h_error_lower, h_error_upper)
             img_simple_outline,img_simple_contour=decision_mask(img_mask)
             bigsquares,img3=list_area(bilateral_img,img_mask,img_simple_contour,img2)
+            
+            #####デバッグモード
             #debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3)
+            
         fixpix=avepix(bigsquares)
         math_long(fixpix,i)
         bigsquares.clear()
         
-def campic():#カメラで撮影
+def campic(i):#カメラで撮影
     with picamera.PiCamera() as picameras:
         picameras.awb_mode=awbx
         picameras.meter_mode=meterx
         picameras.exposure_mode=exposurex
         for nums in range(countsphoto):
-            jpegfile_num=nums
-            jpegfile_name=jpegfile_start+str(jpegfile_num)+jpegfile_end
+            jpegfile_name=jpegfile_start+str(nums)+jpegfile_end
             picameras.capture(jpegfile_name)
+            #print(jpegfile_name)
+            
+            if i==0:
+                img = cv2.imread(jpegfile_name)
+                des=img[cutset[1]:cutset[1]+cutset[3],cutset[0]:cutset[0]+cutset[2]]
+                cv2.imwrite(jpegfile_name,des)
+                
             
 def gpiocon(servoint,i):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(14, GPIO.OUT)
+    GPIO.setup(15, GPIO.OUT)
     servoi=0
     if i==0:
         GPIO.output(14, False)
-        GPIO.output(14, False)
+        GPIO.output(15, False)
     elif i==1:
         GPIO.output(14, True)
-        GPIO.output(14, False)
+        GPIO.output(15, False)
     elif i==2:
         GPIO.output(14, False)
-        GPIO.output(14, True)
-    
-        
+        GPIO.output(15, True)
 
-def math_long(square,i):
-    #直線上の場合
-    if i==0:
-        square=(2.918*(10**(-16))*(square**4))-(6.947*(10**(-11))*(square**3))+6.135*(10**(-6))*(square**2)-0.247*square+6258.9623
-    else:
-        square=(2.918*(10**(-16))*(square**4))-(6.947*(10**(-11))*(square**3))+6.135*(10**(-6))*(square**2)-0.247*square+6158.9623   
-    anses.append(square)
 
 
 def file_settings(num):#ファイル名設定
@@ -129,7 +141,7 @@ def list_area(bilateral_img,img_mask,img_simple_contour,img2):#面積のリス�
     for i in large_simple_contour:
         img3 = cv2.drawContours(img2, i,-1, (255,0,0), 3)
     square.sort(reverse=True)
-    print(square)
+    #print(square)
     bigsquares.append(square[0])
     return bigsquares,img3
     #list内包型
@@ -139,9 +151,9 @@ def list_area(bilateral_img,img_mask,img_simple_contour,img2):#面積のリス�
     #   large_simple_contour.append(i)
 
 def avepix(bigsquares):#ピクセルの平均を得る
-    print (bigsquares)
+    #print (bigsquares)
     fixpix=sum(bigsquares)/len(bigsquares)
-    print (fixpix)
+    #print (fixpix)
     return fixpix
 
 def debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3):# マスクから判別する場合のデバッグ
@@ -158,18 +170,23 @@ def debug_mask_images(img,img_hsv,bilateral_img,img_mask,img3):# マスクから
     
 while True:
     GPIO.cleanup()
-    sendcodeb="B"
-    sendcodec="C"
-    sendcodee="E"
-    readxbyte=ser.readline()
+    readxbyte=ser.read()
     readx=readxbyte.strip().decode('utf-8')
     if readx=="A":
-        ser.write(sendcodeb.encode())
         Image_processing()
-        ser.write(sendcodec.encode())
-    elif readx=="D":
-        sendcodeans="E""\n\r"+str(anses[0])+"\n\r"+str(anses[1])+"\n\r"+str(anses[2])
-        ser.write(sendcodeans.encode())
-        print(sendcodeans)
+        anses[0]=anses[0]/20
+        xa=int(anses[0])
+        xb=xa.to_bytes(1,"little")
+        anses[1]=anses[1]/20
+        ya=int(anses[1])
+        yb=ya.to_bytes(1,"little")
+        anses[2]=anses[2]/20
+        za=int(anses[2])
+        zb=za.to_bytes(1,"little")
+        ser.write(b"B")
+        ser.write(xb)
+        ser.write(yb)
+        ser.write(zb)
+        #print(sendcodeans)
         anses.clear()
         
